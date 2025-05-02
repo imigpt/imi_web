@@ -108,7 +108,7 @@ audio {
     let micStream;
 
     document.getElementById('startBtn').onclick = async function () {
-      socket = new WebSocket("wss://tdotl5s0nofznv-8000.proxy.runpod.net/ws/assistant");
+      socket = new WebSocket("wss://8vsh9q7vh65stl-8000.proxy.runpod.net/ws/assistant");
 
       socket.onopen = async function () {
         log("✅ Connected to Assistant!");
@@ -216,7 +216,7 @@ audio {
 
     function playAudio(audioData) {
       const audioPlayer = document.getElementById('audioPlayer');
-      const backendBaseUrl = "https://tdotl5s0nofznv-8000.proxy.runpod.net";
+      const backendBaseUrl = "https://8vsh9q7vh65stl-8000.proxy.runpod.net";
       const fullAudioUrl = backendBaseUrl + audioData;
 
       audioPlayer.src = fullAudioUrl;
