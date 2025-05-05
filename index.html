@@ -98,6 +98,124 @@ audio {
   <div id="log"></div>
   <audio id="audioPlayer" controls></audio>
 
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IMI Voice Assistant</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #0d0d1a;
+      color: white;
+      font-family: 'Segoe UI', sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      overflow: hidden;
+      position: relative;
+      padding: 20px 0;
+    }
+
+    .brand {
+      font-size: 9vw;
+      font-weight: bold;
+      background: linear-gradient(to right, #ff00ff, #00ffff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-top: 20px;
+    }
+
+    .subtitle {
+      font-size: 4.5vw;
+      color: #bbb;
+      margin-top: 10px;
+      margin-bottom: 30px;
+      text-align: center;
+      padding: 0 20px;
+    }
+
+    .mic-container {
+      position: relative;
+      z-index: 2;
+    }
+
+    .mic-button {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: radial-gradient(circle at center, #ff00ff, #6e00ff);
+      box-shadow: 0 0 25px #ff00ffaa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mic-button:active {
+      transform: scale(1.1);
+    }
+
+    .mic-button i {
+      font-size: 36px;
+      color: white;
+      z-index: 2;
+    }
+
+    .mic-button canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 90px;
+      height: 90px;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    #log {
+      max-height: 120px;
+      overflow-y: auto;
+      font-size: 3vw;
+      padding: 10px;
+      text-align: left;
+      width: 90%;
+      margin: auto;
+      display: none;
+    }
+
+    audio {
+      display: none;
+    }
+
+  </style>
+  <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+  <div class="brand">IMI</div>
+  <div class="subtitle">Speak and let your voice control the future</div>
+
+  <div class="mic-container">
+    <div class="mic-button" id="micBtn">
+      <i class="fas fa-microphone"></i>
+      <canvas id="waveform"></canvas>
+    </div>
+  </div>
+
+  <div id="log"></div>
+  <audio id="audioPlayer" controls></audio>
+
   <script>
     let socket;
     let mediaRecorder;
@@ -106,48 +224,26 @@ audio {
     let analyser;
     let audioContext;
     let micStream;
-
-    document.getElementById('startBtn').onclick = async function () {
-      socket = new WebSocket("wss://8vsh9q7vh65stl-8000.proxy.runpod.net/ws/assistant");
-
-      socket.onopen = async function () {
-        log("✅ Connected to Assistant!");
-        await startMic();
-      };
-
-      socket.onmessage = function (event) {
-        log(event.data);
-        const response = JSON.parse(event.data);
-        if (response.audio_url) {
-          playAudio(response.audio_url);
-        }
-      };
-
-      socket.onclose = function () {
-        log("❌ Connection closed.");
-        stopMic();
-      };
-
-      socket.onerror = function (error) {
-        log("❌ Error: " + error.message);
-      };
-    };
-
-    function log(message) {
-      const logDiv = document.getElementById('log');
-      const p = document.createElement('p');
-      p.textContent = message;
-      logDiv.style.display = 'block';
-      logDiv.appendChild(p);
+    const canvas = document.getElementById('waveform');
+    const ctx = canvas.getContext('2d');
+    let animationId;
+    
+    function resizeCanvas() {
+      canvas.width = 90;
+      canvas.height = 90;
     }
+    resizeCanvas();
 
     async function startMic() {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      analyser = audioContext.createAnalyser();
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const source = audioContext.createMediaStreamSource(micStream);
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      const bufferLength = analyser.fftSize;
+      dataArray = new Uint8Array(bufferLength);
       source.connect(analyser);
+      draw(bufferLength, dataArray);
 
       mediaRecorder = new MediaRecorder(micStream);
       audioChunks = [];
@@ -182,6 +278,7 @@ audio {
       if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
       if (micStream) micStream.getTracks().forEach(track => track.stop());
       if (audioContext) audioContext.close();
+      cancelAnimationFrame(animationId);
     }
 
     function startVAD() {
@@ -214,6 +311,43 @@ audio {
       }, 200);
     }
 
+    function draw(bufferLength, dataArray) {
+      animationId = requestAnimationFrame(() => draw(bufferLength, dataArray));
+      analyser.getByteTimeDomainData(dataArray);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255,0,255,0.8)';
+      ctx.beginPath();
+
+      const sliceWidth = canvas.width * 1.0 / bufferLength;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = v * canvas.height / 2;
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+
+        x += sliceWidth;
+      }
+
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+    }
+
+    function log(message) {
+      const logDiv = document.getElementById('log');
+      const p = document.createElement('p');
+      p.textContent = message;
+      logDiv.style.display = 'block';
+      logDiv.appendChild(p);
+    }
+
     function playAudio(audioData) {
       const audioPlayer = document.getElementById('audioPlayer');
       const backendBaseUrl = "https://8vsh9q7vh65stl-8000.proxy.runpod.net";
@@ -228,6 +362,45 @@ audio {
         startMic();
       };
     }
+
+    const micBtn = document.getElementById('micBtn');
+    let isListening = false;
+
+    micBtn.addEventListener('click', () => {
+      if (!isListening) {
+        socket = new WebSocket("wss://8vsh9q7vh65stl-8000.proxy.runpod.net/ws/assistant");
+
+        socket.onopen = async function () {
+          log("✅ Connected to Assistant!");
+          await startMic();
+        };
+
+        socket.onmessage = function (event) {
+          log(event.data);
+          const response = JSON.parse(event.data);
+          if (response.audio_url) {
+            playAudio(response.audio_url);
+          }
+        };
+
+        socket.onclose = function () {
+          log("❌ Connection closed.");
+          stopMic();
+        };
+
+        socket.onerror = function (error) {
+          log("❌ Error: " + error.message);
+        };
+
+        isListening = true;
+      } else {
+        stopMic();
+        isListening = false;
+      }
+    });
   </script>
+</body>
+</html>
+
 </body>
 </html>
