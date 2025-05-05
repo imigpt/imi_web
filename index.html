@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>IMI Voice Assistant</title>
   <style>
     * {
@@ -11,41 +11,48 @@
       padding: 0;
     }
 
-    body {
+    html, body {
+      height: 100%;
+      width: 100%;
+      font-family: 'Segoe UI', sans-serif;
       background: #0d0d1a;
       color: white;
-      font-family: 'Segoe UI', sans-serif;
-      height: 100vh;
+    }
+
+    body {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: space-between;
-      overflow: hidden;
-      position: relative;
-      padding: 20px 0;
+      padding: 20px 10px;
     }
 
     .brand {
-      font-size: 9vw;
+      font-size: clamp(32px, 9vw, 64px);
       font-weight: bold;
       background: linear-gradient(to right, #ff00ff, #00ffff);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
+      text-align: center;
       margin-top: 20px;
     }
 
     .subtitle {
-      font-size: 4.5vw;
+      font-size: clamp(14px, 4.5vw, 24px);
       color: #bbb;
       margin-top: 10px;
       margin-bottom: 30px;
       text-align: center;
-      padding: 0 20px;
+      padding: 0 10px;
     }
 
     .mic-container {
       position: relative;
       z-index: 2;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 40px;
     }
 
     .mic-button {
@@ -83,17 +90,6 @@
       z-index: 1;
     }
 
-    #log {
-      max-height: 120px;
-      overflow-y: auto;
-      font-size: 3vw;
-      padding: 10px;
-      text-align: left;
-      width: 90%;
-      margin: auto;
-      display: none;
-    }
-
     audio {
       display: none;
     }
@@ -113,7 +109,6 @@
     </div>
   </div>
 
-  <div id="log"></div>
   <audio id="audioPlayer" controls></audio>
 
   <script>
@@ -127,7 +122,7 @@
     const canvas = document.getElementById('waveform');
     const ctx = canvas.getContext('2d');
     let animationId;
-    
+
     function resizeCanvas() {
       canvas.width = 90;
       canvas.height = 90;
@@ -156,7 +151,6 @@
 
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        log("💾 Audio recorded. Sending to backend...");
 
         if (socket && socket.readyState === WebSocket.OPEN) {
           const reader = new FileReader();
@@ -169,7 +163,6 @@
       };
 
       mediaRecorder.start();
-      log("🎤 Recording started...");
       startVAD();
     }
 
@@ -184,7 +177,6 @@
     function startVAD() {
       const silenceThreshold = 0.01;
       const silenceDuration = 1500;
-
       let silenceStart = null;
 
       vadInterval = setInterval(() => {
@@ -202,7 +194,6 @@
           if (!silenceStart) {
             silenceStart = Date.now();
           } else if (Date.now() - silenceStart > silenceDuration) {
-            log("🤫 Silence detected. Stopping recording...");
             stopMic();
           }
         } else {
@@ -217,7 +208,7 @@
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(255,0,255,0.8)';
+      ctx.strokeStyle = 'rgba(0,255,255,0.8)'; // Cyan
       ctx.beginPath();
 
       const sliceWidth = canvas.width * 1.0 / bufferLength;
@@ -240,24 +231,13 @@
       ctx.stroke();
     }
 
-    function log(message) {
-      const logDiv = document.getElementById('log');
-      const p = document.createElement('p');
-      p.textContent = message;
-      logDiv.style.display = 'block';
-      logDiv.appendChild(p);
-    }
-
     function playAudio(audioData) {
       const audioPlayer = document.getElementById('audioPlayer');
       const backendBaseUrl = "https://8vsh9q7vh65stl-8000.proxy.runpod.net";
       const fullAudioUrl = backendBaseUrl + audioData;
 
       audioPlayer.src = fullAudioUrl;
-      audioPlayer.play()
-        .then(() => log("🎶 Playing audio from backend..."))
-        .catch(error => log("❌ Error playing audio: " + error.message));
-
+      audioPlayer.play().catch(() => {});
       audioPlayer.onended = function () {
         startMic();
       };
@@ -271,12 +251,10 @@
         socket = new WebSocket("wss://8vsh9q7vh65stl-8000.proxy.runpod.net/ws/assistant");
 
         socket.onopen = async function () {
-          log("✅ Connected to Assistant!");
           await startMic();
         };
 
         socket.onmessage = function (event) {
-          log(event.data);
           const response = JSON.parse(event.data);
           if (response.audio_url) {
             playAudio(response.audio_url);
@@ -284,12 +262,11 @@
         };
 
         socket.onclose = function () {
-          log("❌ Connection closed.");
           stopMic();
         };
 
-        socket.onerror = function (error) {
-          log("❌ Error: " + error.message);
+        socket.onerror = function () {
+          stopMic();
         };
 
         isListening = true;
